@@ -1,0 +1,9 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools" android:layout_width="match_parent" android:layout_height="match_parent" tools:context=".MainActivity">
+<SurfaceView android:id="@+id/preview_surface" android:layout_width="match_parent" android:layout_height="match_parent" android:clickable="true" android:onClick="onClick"/>
+<ImageView android:id="@+id/bitmap_view" android:layout_width="match_parent" android:layout_height="match_parent" android:clickable="true" android:onClick="onClick" android:visibility="invisible"/>
+<LinearLayout android:id="@+id/sizes_view" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_gravity="center" android:background="@android:color/black" android:orientation="vertical">
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_horizontal" android:text="640x480"/>
+</LinearLayout>
+<Button android:id="@+id/switch_button" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="top|left" android:onClick="onClick" android:text="switch camera"/>
+<Button android:id="@+id/capture_button" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="top|right" android:onClick="onClick" android:text="take picture"/>
+</FrameLayout>
