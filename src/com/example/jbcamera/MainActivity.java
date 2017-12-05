@@ -11,6 +11,9 @@ import android.hardware.Camera;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.app.Activity;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Looper;
 import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceHolder;
@@ -130,24 +133,30 @@ public class MainActivity extends Activity implements OnClickListener {
 		previewSurfaceView.getHolder().addCallback(shCallback);
 	}
 
+	Handler cameraHandler;
+
 	protected void startCamera(final int id) {
 
-		releaseCamera();
 //		startPreview(id, openCamera(id));
 
-		new AsyncTask<Integer, Void, Camera>() {
-
-			@Override
-			protected Camera doInBackground(Integer... ids) {
-				return openCamera(ids[0]);
-			}
-
-			@Override
-			protected void onPostExecute(Camera c) {
-				startPreview(id, c);
-			}
-
-		}.execute(id);
+		if (cameraHandler == null) {
+			HandlerThread handlerThread = new HandlerThread("CameraHandlerThread");
+			handlerThread.start();
+			cameraHandler = new Handler(handlerThread.getLooper());
+		}
+		releaseCamera();
+		cameraHandler.post(new Runnable() {
+		   @Override
+		   public void run() {
+			   final Camera camera = openCamera(id);
+			   runOnUiThread(new Runnable() {
+				   @Override
+				   public void run() {
+					   startPreview(id, camera);
+				   }
+			   });
+		   }
+	   });
 	}
 
 	private void releaseCamera() {
