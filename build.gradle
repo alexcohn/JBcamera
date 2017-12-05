@@ -1,0 +1,28 @@
+buildscript {
+    dependencies {
+        classpath 'com.android.tools.build:gradle:3.1.0-alpha04'
+    }
+    repositories {
+        jcenter()
+        google()
+    }
+}
+
+repositories {
+    jcenter()
+    google()
+}
+
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 'android-26'
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDir 'src'
+            res.srcDir 'res'
+        }
+    }
+}
