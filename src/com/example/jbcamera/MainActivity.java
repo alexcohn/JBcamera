@@ -21,9 +21,14 @@ import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
+
+import com.google.android.gms.instantapps.InstantApps;
 
 public class MainActivity extends Activity {
 
@@ -37,6 +42,11 @@ public class MainActivity extends Activity {
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
+		boolean isInstantApp = InstantApps.getPackageManagerCompat(this).isInstantApp();
+		Log.d(LOG_TAG, "are we instant? " + isInstantApp);
+		findViewById(R.id.preview_surface).setOnClickListener(clickListener);
+		findViewById(R.id.capture_button).setOnClickListener(clickListener);
+		findViewById(R.id.switch_button).setOnClickListener(clickListener);
 	}
 
 	private View.OnClickListener clickListener = new View.OnClickListener() {
