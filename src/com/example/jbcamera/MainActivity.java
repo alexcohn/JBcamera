@@ -4,33 +4,34 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.List;
 
-import android.R.color;
+import android.Manifest;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.hardware.Camera;
-import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.app.Activity;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.Looper;
 import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
-import android.view.View.OnClickListener;
-import android.view.ViewGroup.LayoutParams;
-import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-public class MainActivity extends Activity implements OnClickListener {
+public class MainActivity extends Activity {
 
   private static final String LOG_TAG = "JBCamera";
+	private static final int REQUEST_CAMERA_PERMISSION = 21;
 	private int cameraId = 1;
 	private Camera camera = null;
+	private boolean waitForPermission = false;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -38,42 +39,101 @@ public class MainActivity extends Activity implements OnClickListener {
 		setContentView(R.layout.activity_main);
 	}
 
-	@Override
-	public void onClick(View v) {
+	private View.OnClickListener clickListener = new View.OnClickListener() {
+		@Override
+		public void onClick(View v) {
 
-		if (findViewById(R.id.bitmap_view).getVisibility() == View.VISIBLE) {
-			v.setVisibility(View.INVISIBLE);
-			camera.startPreview();
-			return;
+			if (camera == null) {
+				return;
+			} else if (v.getId() == R.id.bitmap_view) {
+				v.setVisibility(View.INVISIBLE);
+				camera.startPreview();
+			} else if (v.getId() == R.id.preview_surface) {
+				try {
+					camera.takePicture(null, null, pictureCallback);
+				} catch (RuntimeException e) {
+					Log.e(LOG_TAG, "preview_surface", e);
+				}
+			} else if (v.getId() == R.id.capture_button) {
+				try {
+					camera.takePicture(null, null, pictureCallback);
+				} catch (RuntimeException e) {
+					Log.e(LOG_TAG, "capture_button", e);
+				}
+			} else if (v.getId() == R.id.switch_button) {
+				switchCamera();
+			} else if (v.getTag() != null && v.getTag().getClass() == Camera.Size.class) {
+				Camera.Size sz = (Camera.Size) v.getTag();
+				Log.d(LOG_TAG, "setPictureSize " + sz.width + "x" + sz.height);
+				setPictureSize(sz.width, sz.height);
+				((View) v.getParent()).setVisibility(View.INVISIBLE);
+			}
 		}
-
-		if (v.getId() == R.id.preview_surface) {
-			camera.takePicture(null, null, pictureCallback);
-		}
-		else if (v.getId() == R.id.capture_button) {
-			camera.takePicture(null, null, pictureCallback);
-		}
-		else if (v.getId() == R.id.switch_button) {
-			switchCamera();
-		}
-		else if (v.getTag() != null && v.getTag().getClass() == Camera.Size.class) {
-			Camera.Size sz = (Camera.Size)v.getTag();
-			Log.d(LOG_TAG, "setPictureSize " + sz.width + "x" + sz.height);
-			setPictureSize(sz.width, sz.height);
-			((View) v.getParent()).setVisibility(View.INVISIBLE);
-		}
-	}
+	};
 
 	public void switchCamera() {
 		startCamera(1 - cameraId);
 	}
 
 	@Override
-	public void onResume()
-	{
-		Log.d(LOG_TAG, "onResume");
+	public void onResume() {
 		super.onResume();
 		setSurface();
+	}
+
+	@Override
+	protected void onStart() {
+		super.onStart();
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+			if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+				waitForPermission = true;
+				requestCameraPermission();
+			}
+		}
+	}
+
+	@RequiresApi(api = Build.VERSION_CODES.M)
+	private void requestCameraPermission() {
+		if (shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
+			AlertDialog confirmationDialog = new AlertDialog.Builder(this)
+					.setMessage(R.string.request_permission)
+					.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+						@Override
+						public void onClick(DialogInterface dialog, int which) {
+							requestPermissions(new String[]{Manifest.permission.CAMERA},
+								REQUEST_CAMERA_PERMISSION);
+						}
+					})
+					.setNegativeButton(android.R.string.cancel,
+							new DialogInterface.OnClickListener() {
+								@Override
+								public void onClick(DialogInterface dialog, int which) {
+									finish();
+								}
+							})
+					.create();
+			confirmationDialog.show();
+		} else {
+			requestPermissions(new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
+		}
+	}
+
+	@Override
+	public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+										   @NonNull int[] grantResults) {
+		if (requestCode == REQUEST_CAMERA_PERMISSION) {
+			if (grantResults.length != 1 || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+				AlertDialog errorDialog = new AlertDialog.Builder(this)
+					.setMessage(R.string.request_permission).create();
+				errorDialog.show();
+				finish();
+			} else {
+				waitForPermission = false;
+				startCamera(cameraId);
+			}
+		} else {
+			super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+		}
 	}
 
 	private Camera.PictureCallback pictureCallback = new Camera.PictureCallback() {
@@ -81,19 +141,25 @@ public class MainActivity extends Activity implements OnClickListener {
 		@Override
 		public void onPictureTaken(byte[] data, Camera camera) {
 			try {
-				FileOutputStream jpg = new FileOutputStream("/sdcard/JBCameraCapture.jpg");
+ 				String jpgPath = getCacheDir() + "/JBCameraCapture.jpg";
+				FileOutputStream jpg = new FileOutputStream(jpgPath);
 				jpg.write(data);
 				jpg.close();
 
-				Log.i(LOG_TAG, "written " + data.length + " bytes to /sdcard/JBCameraCapture.jpg");
+				Log.i(LOG_TAG, "written " + data.length + " bytes to " + jpgPath);
 
-				Bitmap bmp = BitmapFactory.decodeByteArray(data, 0, data.length);
+				final Bitmap bmp = BitmapFactory.decodeByteArray(data, 0, data.length);
 
 				Log.i(LOG_TAG, "bmp dimensions " + bmp.getWidth() + "x" + bmp.getHeight());
 
-				ImageView bmpView = (ImageView)findViewById(R.id.bitmap_view);
-				bmpView.setImageBitmap(bmp);
-				bmpView.setVisibility(View.VISIBLE);
+				final ImageView bmpView = (ImageView)findViewById(R.id.bitmap_view);
+				bmpView.post(new Runnable() {
+					@Override
+					public void run() {
+						bmpView.setImageBitmap(bmp);
+						bmpView.setVisibility(View.VISIBLE);
+					}
+				});
 
 			} catch (Exception e) {
 				e.printStackTrace();
@@ -137,12 +203,14 @@ public class MainActivity extends Activity implements OnClickListener {
 
 	protected void startCamera(final int id) {
 
-//		startPreview(id, openCamera(id));
-
 		if (cameraHandler == null) {
 			HandlerThread handlerThread = new HandlerThread("CameraHandlerThread");
 			handlerThread.start();
 			cameraHandler = new Handler(handlerThread.getLooper());
+		}
+		Log.d(LOG_TAG, "startCamera(" + id + "): " + (waitForPermission ? "waiting" : "proceeding"));
+		if (waitForPermission) {
+			return;
 		}
 		releaseCamera();
 		cameraHandler.post(new Runnable() {
@@ -198,26 +266,32 @@ public class MainActivity extends Activity implements OnClickListener {
 			degrees += ci.orientation;
 		}
 		camera.setDisplayOrientation(degrees%360);
-		camera.startPreview();
+		choosePictureResolution();
 
-		openChoosePictureResolution();
+		camera.startPreview();
 	}
 
-	private void openChoosePictureResolution() {
+	private void choosePictureResolution() {
 
 		List<Camera.Size> supportedSizes;
 		Camera.Parameters params = camera.getParameters();
 
-//		supportedSizes = params.getSupportedPreviewSizes();
-//		for (Camera.Size sz : supportedSizes) {
-//			Log.d(LOG_TAG, "supportedPreviewSizes " + sz.width + "x" + sz.height);
-//		}
-//		supportedSizes = params.getSupportedVideoSizes();
-//		for (Camera.Size sz : supportedSizes) {
-//			Log.d(LOG_TAG, "supportedVideoSizes " + sz.width + "x" + sz.height);
-//		}
+		supportedSizes = params.getSupportedPreviewSizes();
+		for (Camera.Size sz : supportedSizes) {
+			Log.d(LOG_TAG, "supportedPreviewSizes " + sz.width + "x" + sz.height);
+		}
+		params.setPreviewSize(supportedSizes.get(0).width, supportedSizes.get(0).height);
+
+		supportedSizes = params.getSupportedVideoSizes();
+		for (Camera.Size sz : supportedSizes) {
+			Log.d(LOG_TAG, "supportedVideoSizes " + sz.width + "x" + sz.height);
+		}
 
 		supportedSizes = params.getSupportedPictureSizes();
+		for (Camera.Size sz : supportedSizes) {
+			Log.d(LOG_TAG, "supportedPictureSizes " + sz.width + "x" + sz.height);
+		}
+		params.setPictureSize(supportedSizes.get(0).width, supportedSizes.get(0).height);
 
 		LinearLayout lv = (LinearLayout)findViewById(R.id.sizes_view);
 		lv.removeAllViews();
@@ -225,13 +299,18 @@ public class MainActivity extends Activity implements OnClickListener {
 		for (Camera.Size sz : supportedSizes) {
 			Log.d(LOG_TAG, "supportedPictureSizes " + sz.width + "x" + sz.height);
 			TextView item = new TextView(this);
-			item.setOnClickListener(this);
-			item.setText("    " + sz.width + "x" + sz.height);
+			item.setOnClickListener(clickListener);
+			item.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+			item.setText("  " + sz.width + "x" + sz.height + "  ");
 			item.setTag(sz);
 			lv.addView(item);
 		}
-
 		lv.setVisibility(View.VISIBLE);
+
+		Log.d(LOG_TAG, "current preview size " + params.getPreviewSize().width + "x" + params.getPreviewSize().height);
+		Log.d(LOG_TAG, "current picture size " + params.getPictureSize().width + "x" + params.getPictureSize().height);
+		// TODO: choose the best preview & picture size, and also fit the surface aspect ratio to preview aspect ratio
+		camera.setParameters(params);
 	}
 
 	private static Camera openCamera(int id) {
@@ -242,7 +321,9 @@ public class MainActivity extends Activity implements OnClickListener {
 			Log.d(LOG_TAG, "opened camera " + id);
 		} catch (Exception e) {
 			e.printStackTrace();
-			camera.release();
+			if (camera != null) {
+				camera.release();
+			}
 			camera = null;
 		}
 		return camera;

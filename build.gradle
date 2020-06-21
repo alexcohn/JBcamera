@@ -1,6 +1,6 @@
 buildscript {
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.1.0-alpha04'
+        classpath 'com.android.tools.build:gradle:4.2.0-alpha02'
     }
     repositories {
         jcenter()
@@ -16,7 +16,7 @@ repositories {
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 'android-26'
+    compileSdkVersion 29
 
     sourceSets {
         main {

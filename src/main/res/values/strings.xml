@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="request_permission">This app needs camera permission.</string>
+    <string name="take_picture">take picture</string>
+    <string name="switch_camera">switch camera</string>
+    <string name="app_name">Instant Camera</string>
+</resources>
