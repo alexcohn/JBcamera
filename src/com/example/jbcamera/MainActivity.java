@@ -45,9 +45,6 @@ public class MainActivity extends Activity {
 
 			if (camera == null) {
 				return;
-			} else if (v.getId() == R.id.bitmap_view) {
-				v.setVisibility(View.INVISIBLE);
-				camera.startPreview();
 			} else if (v.getId() == R.id.preview_surface) {
 				try {
 					camera.takePicture(null, null, pictureCallback);
@@ -62,11 +59,6 @@ public class MainActivity extends Activity {
 				}
 			} else if (v.getId() == R.id.switch_button) {
 				switchCamera();
-			} else if (v.getTag() != null && v.getTag().getClass() == Camera.Size.class) {
-				Camera.Size sz = (Camera.Size) v.getTag();
-				Log.d(LOG_TAG, "setPictureSize " + sz.width + "x" + sz.height);
-				setPictureSize(sz.width, sz.height);
-				((View) v.getParent()).setVisibility(View.INVISIBLE);
 			}
 		}
 	};
@@ -139,7 +131,7 @@ public class MainActivity extends Activity {
 	private Camera.PictureCallback pictureCallback = new Camera.PictureCallback() {
 
 		@Override
-		public void onPictureTaken(byte[] data, Camera camera) {
+		public void onPictureTaken(byte[] data, Camera cam) {
 			try {
  				String jpgPath = getCacheDir() + "/JBCameraCapture.jpg";
 				FileOutputStream jpg = new FileOutputStream(jpgPath);
@@ -158,9 +150,9 @@ public class MainActivity extends Activity {
 					public void run() {
 						bmpView.setImageBitmap(bmp);
 						bmpView.setVisibility(View.VISIBLE);
+						camera.startPreview();
 					}
 				});
-
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -292,20 +284,6 @@ public class MainActivity extends Activity {
 			Log.d(LOG_TAG, "supportedPictureSizes " + sz.width + "x" + sz.height);
 		}
 		params.setPictureSize(supportedSizes.get(0).width, supportedSizes.get(0).height);
-
-		LinearLayout lv = (LinearLayout)findViewById(R.id.sizes_view);
-		lv.removeAllViews();
-
-		for (Camera.Size sz : supportedSizes) {
-			Log.d(LOG_TAG, "supportedPictureSizes " + sz.width + "x" + sz.height);
-			TextView item = new TextView(this);
-			item.setOnClickListener(clickListener);
-			item.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
-			item.setText("  " + sz.width + "x" + sz.height + "  ");
-			item.setTag(sz);
-			lv.addView(item);
-		}
-		lv.setVisibility(View.VISIBLE);
 
 		Log.d(LOG_TAG, "current preview size " + params.getPreviewSize().width + "x" + params.getPreviewSize().height);
 		Log.d(LOG_TAG, "current picture size " + params.getPictureSize().width + "x" + params.getPictureSize().height);
