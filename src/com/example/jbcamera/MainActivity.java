@@ -5,15 +5,13 @@ import java.io.IOException;
 import java.util.List;
 
 import android.Manifest;
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.hardware.Camera;
 import android.os.Build;
 import android.os.Bundle;
-import android.app.Activity;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
@@ -21,9 +19,6 @@ import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.FrameLayout;
-import android.widget.ImageView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
@@ -32,11 +27,12 @@ import com.google.android.gms.instantapps.InstantApps;
 
 public class MainActivity extends Activity {
 
-  private static final String LOG_TAG = "JBCamera";
+  private static final String LOG_TAG = "Scanner";
 	private static final int REQUEST_CAMERA_PERMISSION = 21;
-	private int cameraId = 1;
+	private int cameraId = 0;
 	private Camera camera = null;
 	private boolean waitForPermission = false;
+	private int previewSize;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -150,19 +146,7 @@ public class MainActivity extends Activity {
 
 				Log.i(LOG_TAG, "written " + data.length + " bytes to " + jpgPath);
 
-				final Bitmap bmp = BitmapFactory.decodeByteArray(data, 0, data.length);
-
-				Log.i(LOG_TAG, "bmp dimensions " + bmp.getWidth() + "x" + bmp.getHeight());
-
-				final ImageView bmpView = (ImageView)findViewById(R.id.bitmap_view);
-				bmpView.post(new Runnable() {
-					@Override
-					public void run() {
-						bmpView.setImageBitmap(bmp);
-						bmpView.setVisibility(View.VISIBLE);
-						camera.startPreview();
-					}
-				});
+				camera.startPreview();
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -268,12 +252,12 @@ public class MainActivity extends Activity {
 			degrees += ci.orientation;
 		}
 		camera.setDisplayOrientation(degrees%360);
-		choosePictureResolution();
+		setCameraParameters();
 
 		camera.startPreview();
 	}
 
-	private void choosePictureResolution() {
+	private void setCameraParameters() {
 
 		List<Camera.Size> supportedSizes;
 		Camera.Parameters params = camera.getParameters();
@@ -307,14 +291,14 @@ public class MainActivity extends Activity {
 		try {
 			camera = Camera.open(id);
 			Log.d(LOG_TAG, "opened camera " + id);
+			return camera;
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.e(LOG_TAG, "failed to open camera " + id, e);
 			if (camera != null) {
 				camera.release();
 			}
-			camera = null;
 		}
-		return camera;
+		return null;
 	}
 
 	private void setPictureSize(int width, int height) {

@@ -1,6 +1,6 @@
 buildscript {
     dependencies {
-        classpath 'com.android.tools.build:gradle:4.2.0-alpha02'
+        classpath 'com.android.tools.build:gradle:4.2.0-alpha07'
     }
     repositories {
         jcenter()
@@ -31,5 +31,15 @@ android {
     }
     dependencies {
         implementation "com.google.android.gms:play-services-instantapps:17.0.0"
+    }
+
+    flavorDimensions "experience"
+    productFlavors {
+        instant {
+            versionCode 1
+        }
+        installed {
+            versionCode 1001
+        }
     }
 }
