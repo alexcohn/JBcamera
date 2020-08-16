@@ -2,37 +2,29 @@ package com.example.jbcamera
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.Activity
+import android.app.AlertDialog
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
-import java.lang.RuntimeException
-import android.os.Build
-import android.content.pm.PackageManager
+import androidx.activity.ComponentActivity
 import androidx.annotation.RequiresApi
-import android.app.AlertDialog
-import android.hardware.Camera
-import android.hardware.Camera.PictureCallback
-import java.io.FileOutputStream
-import java.lang.Exception
-import android.view.SurfaceHolder
-import android.view.SurfaceView
-import android.os.HandlerThread
-import android.view.Surface
-import android.hardware.Camera.CameraInfo
-import android.os.Handler
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
 import com.google.android.gms.instantapps.InstantApps
-import java.io.IOException
-
 import kotlinx.android.synthetic.main.activity_main.*
-import java.io.ByteArrayInputStream
-import java.io.InputStream
+import java.io.File
+import java.io.FileOutputStream
 
-class MainActivity : Activity() {
-    private var cameraId = 0
-    private var camera: Camera? = null
-    private var waitForPermission = false
+class MainActivity : ComponentActivity() {
+    private var imageCapture: ImageCapture? = null
+    private var cameraSelector: CameraSelector? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -45,9 +37,9 @@ class MainActivity : Activity() {
 
     private val clickListener = View.OnClickListener { v ->
         when {
-            camera == null -> return@OnClickListener
+            cameraSelector == null -> return@OnClickListener
             v == preview_surface || v == capture_button -> try {
-                    camera!!.takePicture(null, null, pictureCallback)
+                    takePhoto()
                 } catch (e: RuntimeException) {
                     Log.e(LOG_TAG, if (v == preview_surface) "preview_surface" else "capture_button", e)
                 }
@@ -55,23 +47,24 @@ class MainActivity : Activity() {
         }
     }
 
+    @SuppressLint("RestrictedApi")
     fun switchCamera() {
-        startCamera(1 - cameraId)
-    }
-
-    public override fun onResume() {
-        super.onResume()
-        setSurface()
+        if (cameraSelector?.lensFacing == CameraSelector.LENS_FACING_BACK)
+            cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+        else
+            cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+        startCamera()
     }
 
     override fun onStart() {
         super.onStart()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                waitForPermission = true
                 requestCameraPermission()
+                return
             }
         }
+        startCamera()
     }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
@@ -101,8 +94,7 @@ class MainActivity : Activity() {
                 errorDialog.show()
                 finish()
             } else {
-                waitForPermission = false
-                startCamera(cameraId)
+                startCamera()
             }
         } else {
             super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -110,8 +102,7 @@ class MainActivity : Activity() {
     }
 
     @SuppressLint("RestrictedApi")
-    @Throws(IOException::class)
-    private fun parseExif(inputStream: InputStream) {
+    private fun parseExif(inputStream: File) {
         val exif = ExifInterface(inputStream)
         Log.i(LOG_TAG, "Exif date ${exif.dateTime}")
         Log.i(LOG_TAG, "Exif gpsDate ${exif.gpsDateTime}")
@@ -121,156 +112,123 @@ class MainActivity : Activity() {
         Log.i(LOG_TAG, "Exif model ${exif.getAttribute(ExifInterface.TAG_MODEL)} ${exif.hasAttribute(ExifInterface.TAG_MODEL)}")
     }
 
-    private val pictureCallback = PictureCallback { data, cam ->
-        try {
-            parseExif(ByteArrayInputStream(data))
-            val ihp = ImageHeaderParser(ByteArrayInputStream(data))
-            Log.i(LOG_TAG, "ImageHeaderParser orientation ${ihp.orientation}")
-            val jpgPath = "$cacheDir/JBCameraCapture.jpg"
-            val jpg = FileOutputStream(jpgPath)
-            jpg.write(data)
-            jpg.close()
-            Log.i(LOG_TAG, "written " + data.size + " bytes to " + jpgPath)
-            camera?.startPreview()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-    private val shCallback: SurfaceHolder.Callback = object : SurfaceHolder.Callback {
-        override fun surfaceDestroyed(holder: SurfaceHolder) {
-            Log.i(LOG_TAG, "surfaceDestroyed callback")
-            camera?.stopPreview()
-            camera?.release()
-            camera = null
-        }
+    private fun takePhoto() {
+        // Get a stable reference of the modifiable image capture use case
+        val imageCapture = imageCapture ?: return
 
-        override fun surfaceCreated(holder: SurfaceHolder) {
-            Log.i(LOG_TAG, "surfaceCreated callback")
-            startCamera(cameraId)
-        }
+        // Set up image capture listener, which is triggered after photo has
+        // been taken
+        imageCapture.takePicture(ContextCompat.getMainExecutor(this), object : ImageCapture.OnImageCapturedCallback() {
+            override fun onCaptureSuccess(image: ImageProxy) {
+                Log.i(LOG_TAG, "rotation ${image.imageInfo.rotationDegrees}")
+                val jpgPath = "$cacheDir/JBCameraCapture.jpg"
+                val jpg = FileOutputStream(jpgPath).channel
+                jpg.write(image.planes[0].buffer)
+                jpg.close()
 
-        override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int,
-                                    height: Int) {
-            Log.i(LOG_TAG, "surfaceChanged callback " + width + "x" + height)
-            restartPreview()
-        }
+                parseExif(File(jpgPath))
+//            val ihp = ImageHeaderParser(ByteArrayInputStream(data))
+//            Log.i(LOG_TAG, "ImageHeaderParser orientation ${ihp.orientation}")
+            Log.i(LOG_TAG, "written " + image.planes[0].buffer.capacity() + " bytes to " + jpgPath)
+
+                image.close()
+            }
+        })
     }
 
-    private fun setSurface() {
-        val previewSurfaceView = findViewById<View>(R.id.preview_surface) as SurfaceView
-        previewSurfaceView.holder.addCallback(shCallback)
+    private fun startCamera() {
+        Log.e(LOG_TAG, "start Camera now!")
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+
+        cameraProviderFuture.addListener(Runnable {
+            // Used to bind the lifecycle of cameras to the lifecycle owner
+            val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
+
+            // Preview
+            val preview = Preview.Builder()
+                    .build()
+                    .also { preview ->
+                        preview.setSurfaceProvider(preview_surface.createSurfaceProvider())
+                    }
+
+            // Select back camera as a default
+            if (cameraSelector == null)
+                cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+            imageCapture = ImageCapture.Builder().build()
+
+            try {
+                // Unbind use cases before rebinding
+                cameraProvider.unbindAll()
+
+                // Bind use cases to camera
+                cameraProvider.bindToLifecycle(
+                        this, cameraSelector!!, preview, imageCapture)
+            } catch (exc: Exception) {
+                Log.e(LOG_TAG, "Use case binding failed", exc)
+            }
+
+        }, ContextCompat.getMainExecutor(this))
     }
 
-    var cameraHandler: Handler? = null
-    protected fun startCamera(id: Int) {
-        if (cameraHandler == null) {
-            val handlerThread = HandlerThread("CameraHandlerThread")
-            handlerThread.start()
-            cameraHandler = Handler(handlerThread.looper)
-        }
-        Log.d(LOG_TAG, "startCamera(" + id + "): " + if (waitForPermission) "waiting" else "proceeding")
-        if (waitForPermission) {
-            return
-        }
-        releaseCamera()
-        cameraHandler!!.post {
-            val camera = openCamera(id)
-            runOnUiThread { startPreview(id, camera) }
-        }
-    }
-
-    private fun releaseCamera() {
-        camera?.stopPreview()
-        camera?.release()
-        camera = null
-    }
 
     private fun restartPreview() {
-        if (camera == null) {
-            return
-        }
-        var degrees = 0
-        when (windowManager.defaultDisplay.rotation) {
-            Surface.ROTATION_0 -> degrees = 0
-            Surface.ROTATION_90 -> degrees = 90
-            Surface.ROTATION_180 -> degrees = 180
-            Surface.ROTATION_270 -> degrees = 270
-        }
-        val ci = CameraInfo()
-        Camera.getCameraInfo(cameraId, ci)
-        if (ci.facing == CameraInfo.CAMERA_FACING_FRONT) {
-            degrees += ci.orientation
-            degrees %= 360
-            degrees = 360 - degrees
-        } else {
-            degrees = 360 - degrees
-            degrees += ci.orientation
-        }
-        camera!!.setDisplayOrientation(degrees % 360)
-        setCameraParameters()
-        camera!!.startPreview()
+//        if (camera == null) {
+//            return
+//        }
+//        var degrees = 0
+//        when (windowManager.defaultDisplay.rotation) {
+//            Surface.ROTATION_0 -> degrees = 0
+//            Surface.ROTATION_90 -> degrees = 90
+//            Surface.ROTATION_180 -> degrees = 180
+//            Surface.ROTATION_270 -> degrees = 270
+//        }
+//        val ci = CameraInfo()
+//        Camera.getCameraInfo(cameraId, ci)
+//        if (ci.facing == CameraInfo.CAMERA_FACING_FRONT) {
+//            degrees += ci.orientation
+//            degrees %= 360
+//            degrees = 360 - degrees
+//        } else {
+//            degrees = 360 - degrees
+//            degrees += ci.orientation
+//        }
+//        camera!!.setDisplayOrientation(degrees % 360)
+//        setCameraParameters()
+//        camera!!.startPreview()
     }
 
     private fun setCameraParameters() {
-        var supportedSizes: List<Camera.Size>
-        val params = camera!!.parameters
-        supportedSizes = params.supportedPreviewSizes
-        for (sz in supportedSizes) {
-            Log.d(LOG_TAG, "supportedPreviewSizes " + sz.width + "x" + sz.height)
-        }
-        params.setPreviewSize(supportedSizes[0].width, supportedSizes[0].height)
-        supportedSizes = params.supportedVideoSizes
-        for (sz in supportedSizes) {
-            Log.d(LOG_TAG, "supportedVideoSizes " + sz.width + "x" + sz.height)
-        }
-        supportedSizes = params.supportedPictureSizes
-        for (sz in supportedSizes) {
-            Log.d(LOG_TAG, "supportedPictureSizes " + sz.width + "x" + sz.height)
-        }
-        params.setPictureSize(supportedSizes[0].width, supportedSizes[0].height)
-        Log.d(LOG_TAG, "current preview size " + params.previewSize.width + "x" + params.previewSize.height)
-        Log.d(LOG_TAG, "current picture size " + params.pictureSize.width + "x" + params.pictureSize.height)
-        // TODO: choose the best preview & picture size, and also fit the surface aspect ratio to preview aspect ratio
-        camera!!.parameters = params
+//        var supportedSizes: List<Camera.Size>
+//        val params = camera!!.parameters
+//        supportedSizes = params.supportedPreviewSizes
+//        for (sz in supportedSizes) {
+//            Log.d(LOG_TAG, "supportedPreviewSizes " + sz.width + "x" + sz.height)
+//        }
+//        params.setPreviewSize(supportedSizes[0].width, supportedSizes[0].height)
+//        supportedSizes = params.supportedVideoSizes
+//        for (sz in supportedSizes) {
+//            Log.d(LOG_TAG, "supportedVideoSizes " + sz.width + "x" + sz.height)
+//        }
+//        supportedSizes = params.supportedPictureSizes
+//        for (sz in supportedSizes) {
+//            Log.d(LOG_TAG, "supportedPictureSizes " + sz.width + "x" + sz.height)
+//        }
+//        params.setPictureSize(supportedSizes[0].width, supportedSizes[0].height)
+//        Log.d(LOG_TAG, "current preview size " + params.previewSize.width + "x" + params.previewSize.height)
+//        Log.d(LOG_TAG, "current picture size " + params.pictureSize.width + "x" + params.pictureSize.height)
+//        // TODO: choose the best preview & picture size, and also fit the surface aspect ratio to preview aspect ratio
+//        camera!!.parameters = params
     }
 
     private fun setPictureSize(width: Int, height: Int) {
-        val params = camera!!.parameters
-        params.setPictureSize(width, height)
-        camera!!.parameters = params
-    }
-
-    private fun startPreview(id: Int, c: Camera?) {
-        if (c != null) {
-            try {
-                val previewSurfaceView = findViewById<View>(R.id.preview_surface) as SurfaceView
-                val holder = previewSurfaceView.holder
-                c.setPreviewDisplay(holder)
-                camera = c
-                cameraId = id
-                restartPreview()
-            } catch (e: IOException) {
-                e.printStackTrace()
-                c.release()
-            }
-        }
+//        val params = camera!!.parameters
+//        params.setPictureSize(width, height)
+//        camera!!.parameters = params
     }
 
     companion object {
         private const val LOG_TAG = "Scanner"
         private const val REQUEST_CAMERA_PERMISSION = 21
-        private fun openCamera(id: Int): Camera? {
-            Log.d(LOG_TAG, "opening camera $id")
-            var camera: Camera? = null
-            try {
-                camera = Camera.open(id)
-                Log.d(LOG_TAG, "opened camera $id")
-                return camera
-            } catch (e: Exception) {
-                Log.e(LOG_TAG, "failed to open camera $id", e)
-                camera?.release()
-            }
-            return null
-        }
     }
 }

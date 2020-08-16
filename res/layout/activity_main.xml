@@ -4,7 +4,7 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <SurfaceView
+    <androidx.camera.view.PreviewView
         android:id="@+id/preview_surface"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
