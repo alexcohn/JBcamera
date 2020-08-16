@@ -4,9 +4,12 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.util.Rational
+import android.view.Surface
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.annotation.RequiresApi
@@ -14,6 +17,7 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.impl.ImageOutputConfig
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
@@ -129,13 +133,14 @@ class MainActivity : ComponentActivity() {
                 parseExif(File(jpgPath))
 //            val ihp = ImageHeaderParser(ByteArrayInputStream(data))
 //            Log.i(LOG_TAG, "ImageHeaderParser orientation ${ihp.orientation}")
-            Log.i(LOG_TAG, "written " + image.planes[0].buffer.capacity() + " bytes to " + jpgPath)
+                Log.i(LOG_TAG, "written " + image.planes[0].buffer.capacity() + " bytes to " + jpgPath)
 
                 image.close()
             }
         })
     }
 
+    @SuppressLint("RestrictedApi")
     private fun startCamera() {
         Log.e(LOG_TAG, "start Camera now!")
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
@@ -147,15 +152,17 @@ class MainActivity : ComponentActivity() {
             // Preview
             val preview = Preview.Builder()
                     .build()
-                    .also { preview ->
-                        preview.setSurfaceProvider(preview_surface.createSurfaceProvider())
+                    .also {
+                        it.setSurfaceProvider(preview_surface.createSurfaceProvider())
                     }
 
             // Select back camera as a default
             if (cameraSelector == null)
                 cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
-            imageCapture = ImageCapture.Builder().build()
+            imageCapture = ImageCapture.Builder()
+                    .setTargetAspectRatioCustom(Rational(preview_surface.width, preview_surface.height))
+                    .build()
 
             try {
                 // Unbind use cases before rebinding
@@ -169,33 +176,6 @@ class MainActivity : ComponentActivity() {
             }
 
         }, ContextCompat.getMainExecutor(this))
-    }
-
-
-    private fun restartPreview() {
-//        if (camera == null) {
-//            return
-//        }
-//        var degrees = 0
-//        when (windowManager.defaultDisplay.rotation) {
-//            Surface.ROTATION_0 -> degrees = 0
-//            Surface.ROTATION_90 -> degrees = 90
-//            Surface.ROTATION_180 -> degrees = 180
-//            Surface.ROTATION_270 -> degrees = 270
-//        }
-//        val ci = CameraInfo()
-//        Camera.getCameraInfo(cameraId, ci)
-//        if (ci.facing == CameraInfo.CAMERA_FACING_FRONT) {
-//            degrees += ci.orientation
-//            degrees %= 360
-//            degrees = 360 - degrees
-//        } else {
-//            degrees = 360 - degrees
-//            degrees += ci.orientation
-//        }
-//        camera!!.setDisplayOrientation(degrees % 360)
-//        setCameraParameters()
-//        camera!!.startPreview()
     }
 
     private fun setCameraParameters() {
@@ -221,10 +201,22 @@ class MainActivity : ComponentActivity() {
 //        camera!!.parameters = params
     }
 
-    private fun setPictureSize(width: Int, height: Int) {
-//        val params = camera!!.parameters
-//        params.setPictureSize(width, height)
-//        camera!!.parameters = params
+    @SuppressLint("RestrictedApi")
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+
+        if (imageCapture == null)
+            return
+
+        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            imageCapture!!.setTargetRotation(Surface.ROTATION_90)
+            imageCapture!!.setCropAspectRatio(Rational(preview_surface.width, preview_surface.height))
+            Log.d(LOG_TAG, "setTargetRotation(Surface.ROTATION_0) ${preview_surface.width}×${preview_surface.height}")
+        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
+            imageCapture!!.setTargetRotation(Surface.ROTATION_0)
+            imageCapture!!.setCropAspectRatio(Rational(preview_surface.width, preview_surface.height))
+            Log.d(LOG_TAG, "setTargetRotation(Surface.ROTATION_90) ${preview_surface.width}×${preview_surface.height}")
+        }
     }
 
     companion object {
