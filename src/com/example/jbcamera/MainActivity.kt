@@ -1,6 +1,7 @@
 package com.example.jbcamera
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.os.Bundle
 import android.util.Log
@@ -20,10 +21,13 @@ import android.os.HandlerThread
 import android.view.Surface
 import android.hardware.Camera.CameraInfo
 import android.os.Handler
+import androidx.exifinterface.media.ExifInterface
 import com.google.android.gms.instantapps.InstantApps
 import java.io.IOException
 
 import kotlinx.android.synthetic.main.activity_main.*
+import java.io.ByteArrayInputStream
+import java.io.InputStream
 
 class MainActivity : Activity() {
     private var cameraId = 0
@@ -105,8 +109,21 @@ class MainActivity : Activity() {
         }
     }
 
+    @SuppressLint("RestrictedApi")
+    @Throws(IOException::class)
+    private fun parseExif(inputStream: InputStream) {
+        val exif = ExifInterface(inputStream)
+        Log.i(LOG_TAG, "Exif date ${exif.dateTime}")
+        Log.i(LOG_TAG, "Exif gpsDate ${exif.gpsDateTime}")
+        Log.i(LOG_TAG, "Exif width ${exif.getAttributeInt(ExifInterface.TAG_IMAGE_WIDTH, -1)}×${exif.getAttributeInt(ExifInterface.TAG_IMAGE_LENGTH, -1)}")
+        Log.i(LOG_TAG, "Exif rotation ${exif.rotationDegrees}")
+        Log.i(LOG_TAG, "Exif orientation ${exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED)} ${exif.hasAttribute(ExifInterface.TAG_ORIENTATION)}")
+        Log.i(LOG_TAG, "Exif model ${exif.getAttribute(ExifInterface.TAG_MODEL)} ${exif.hasAttribute(ExifInterface.TAG_MODEL)}")
+    }
+
     private val pictureCallback = PictureCallback { data, cam ->
         try {
+            parseExif(ByteArrayInputStream(data))
             val jpgPath = "$cacheDir/JBCameraCapture.jpg"
             val jpg = FileOutputStream(jpgPath)
             jpg.write(data)
