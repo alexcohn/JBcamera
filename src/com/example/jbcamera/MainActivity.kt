@@ -124,6 +124,8 @@ class MainActivity : Activity() {
     private val pictureCallback = PictureCallback { data, cam ->
         try {
             parseExif(ByteArrayInputStream(data))
+            val ihp = ImageHeaderParser(ByteArrayInputStream(data))
+            Log.i(LOG_TAG, "ImageHeaderParser orientation ${ihp.orientation}")
             val jpgPath = "$cacheDir/JBCameraCapture.jpg"
             val jpg = FileOutputStream(jpgPath)
             jpg.write(data)
