@@ -160,6 +160,9 @@ class MainActivity : ComponentActivity() {
             if (cameraSelector == null)
                 cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
+            Log.i(LOG_TAG, "preview surface ${preview_surface.width}, ${preview_surface.height}")
+            Log.i(LOG_TAG, "preview surface ${Rational(preview_surface.width, preview_surface.height)}")
+
             imageCapture = ImageCapture.Builder()
                     .setTargetAspectRatioCustom(Rational(preview_surface.width, preview_surface.height))
                     .build()
@@ -171,6 +174,14 @@ class MainActivity : ComponentActivity() {
                 // Bind use cases to camera
                 cameraProvider.bindToLifecycle(
                         this, cameraSelector!!, preview, imageCapture)
+
+                Log.i(LOG_TAG, "camera implementation ${preview.camera?.cameraInfo?.implementationType}")
+                Log.i(LOG_TAG, "camera sensor rotation ${preview.camera?.cameraInfo?.getSensorRotationDegrees()}")
+                Log.i(LOG_TAG, "camera sensor rect ${preview.camera?.cameraControlInternal?.sensorRect}")
+                Log.i(LOG_TAG, "preview resolution ${preview.attachedSurfaceResolution}") // thnks https://stackoverflow.com/a/61859013/192373
+                Log.i(LOG_TAG, "capture resolution ${imageCapture?.attachedSurfaceResolution}")
+                Log.i(LOG_TAG, "capture aspect ratio ${(imageCapture?.useCaseConfig as ImageOutputConfig).getTargetAspectRatioCustom()}")
+
             } catch (exc: Exception) {
                 Log.e(LOG_TAG, "Use case binding failed", exc)
             }
